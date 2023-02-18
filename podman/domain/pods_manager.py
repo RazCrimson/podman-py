@@ -1,9 +1,10 @@
 """PodmanResource manager subclassed for Networks."""
 import json
 import logging
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union, Iterator
 
 from podman import api
+from podman.api.parse_utils import stream_helper
 from podman.domain.manager import Manager
 from podman.domain.pods import Pod
 from podman.errors import APIError
@@ -128,7 +129,7 @@ class PodsManager(Manager):
         response = self.client.delete(f"/pods/{pod_id}", params={"force": force})
         response.raise_for_status()
 
-    def stats(self, **kwargs) -> Dict[str, Any]:
+    def stats(self, **kwargs) -> Union[Dict[str, Any], Iterator[Dict[str, Any]]]:
         """Resource usage statistics for the containers in pods.
 
         Keyword Args:
@@ -142,10 +143,20 @@ class PodsManager(Manager):
         if "all" in kwargs and "name" in kwargs:
             raise ValueError("Keywords 'all' and 'name' are mutually exclusive.")
 
+        # Keeping the default as False to not break existing uses
+        # Should be changed in a newer major version
+        stream = kwargs.get("stream", False)
+        decode = kwargs.get("decode", False)
+
         params = {
             "all": kwargs.get("all"),
             "namesOrIDs": kwargs.get("name"),
+            "stream": stream,
         }
-        response = self.client.get("/pods/stats", params=params)
+        response = self.client.get("/pods/stats", params=params, stream=stream)
         response.raise_for_status()
-        return response.json()
+
+        if stream:
+            return stream_helper(decode, response.iter_lines())
+
+        return json.loads(response.text) if decode else response.content
