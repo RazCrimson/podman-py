@@ -9,6 +9,7 @@ import requests
 from requests import Response
 
 from podman import api
+from podman.api.parse_utils import stream_helper
 from podman.domain.images import Image
 from podman.domain.images_manager import ImagesManager
 from podman.domain.manager import PodmanResource
@@ -413,20 +414,9 @@ class Container(PodmanResource):
         response.raise_for_status()
 
         if stream:
-            return self._stats_helper(decode, response.iter_lines())
+            return stream_helper(decode, response.iter_lines())
 
         return json.loads(response.text) if decode else response.content
-
-    @staticmethod
-    def _stats_helper(
-        decode: bool, body: Iterator[bytes]
-    ) -> Iterator[Union[bytes, Dict[str, Any]]]:
-        """Helper needed to allow stats() to return either a generator or a bytes."""
-        for entry in body:
-            if decode:
-                yield json.loads(entry)
-            else:
-                yield entry
 
     def stop(self, **kwargs) -> None:
         """Stop container.
